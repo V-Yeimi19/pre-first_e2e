@@ -11,10 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Objects;
-
-
 @RestController
 @RequestMapping("/driver")
 @RequiredArgsConstructor
@@ -22,15 +18,9 @@ public class DriverController {
     private final DriverRepository driverRepository;
     private final VehicleRepository vehicleRepository;
 
-    @GetMapping
-    public ResponseEntity<List<Driver>> getAllDrivers() {
-        List<Driver> drivers = driverRepository.findAll();
-        return ResponseEntity.ok(drivers);  // HTTP 200 OK
-    }
-
     @GetMapping("/{id}")
     public ResponseEntity<Driver> getDriver(@PathVariable Long id) {
-        return ResponseEntity.ok(driverRepository.findById(id).orElse(null));
+        return driverRepository.findById(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping
@@ -46,21 +36,18 @@ public class DriverController {
             driverRepository.delete(driver);
             return ResponseEntity.noContent().<Void>build();
         }
-           return ResponseEntity.notFound().build();
+        return ResponseEntity.notFound().build();
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Driver> updateDriver(@PathVariable Long id, @RequestBody Driver new_driver) {
-        Driver existingDriver = driverRepository.findById(id).orElse(null);
-        if (existingDriver != null) {
+        return driverRepository.findById(id).map(existingDriver -> {
             existingDriver.setFirstName(new_driver.getFirstName());
             existingDriver.setLastName(new_driver.getLastName());
             existingDriver.setEmail(new_driver.getEmail());
             existingDriver.setPhoneNumber(new_driver.getPhoneNumber());
             return ResponseEntity.ok(driverRepository.save(existingDriver));
-        }
-
-        return ResponseEntity.ok(null);
+        }).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PatchMapping("/{id}/location")
@@ -88,36 +75,15 @@ public class DriverController {
 
     @PatchMapping("/{id}/car")
     public ResponseEntity<Driver> updateCar(@PathVariable Long id, @RequestBody Vehicle new_vehicle) {
-
-        Driver driver = driverRepository.findById(id).orElse(null);
-
-        if (driver == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Vehicle updatedVehicle = new_vehicle;
-
-        if (updatedVehicle != null) {
-            updatedVehicle = new Vehicle();
-            driver.setVehicle(updatedVehicle);
-        }
-
-        updatedVehicle.setBrand(new_vehicle.getBrand());
-        updatedVehicle.setModel(new_vehicle.getModel());
-        updatedVehicle.setFabricationYear(new_vehicle.getFabricationYear());
-        updatedVehicle.setCapacity(new_vehicle.getCapacity());
-        updatedVehicle.setLicensePlate(new_vehicle.getLicensePlate());
-
-        Vehicle savedVehicle = vehicleRepository.save(updatedVehicle);
-        driver.setVehicle(savedVehicle);
-
-
-        Driver updatedDriver = driverRepository.save(driver);
-
-        return ResponseEntity.ok(updatedDriver);
+        return driverRepository.findById(id).map(driver -> {
+            if (driver.getVehicle() != null) {
+                vehicleRepository.delete(driver.getVehicle());
+            }
+            new_vehicle.setDriver(driver);
+            Vehicle savedVehicle = vehicleRepository.save(new_vehicle);
+            driver.setVehicle(savedVehicle);
+            Driver updatedDriver = driverRepository.save(driver);
+            return ResponseEntity.ok(updatedDriver);
+        }).orElseGet(() -> ResponseEntity.notFound().build());
     }
-
-
-
-
 }
